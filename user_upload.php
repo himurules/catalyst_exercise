@@ -43,3 +43,14 @@ function __getArguments($short_options = array() , $long_options = array('help')
     $short_options = implode('', $short_options);
     return getopt($short_options, $long_options);
 }
+
+function __connectDatabase($db_host, $db_user, $db_password){
+    $db = "catalyst";
+    try {
+        $mysqli = new mysqli($db_host, $db_user, $db_password, $db);
+    } catch (mysqli_sql_exception $e) {
+        print ($e->getMessage().PHP_EOL);
+        die();
+    }
+    return $mysqli;
+}
