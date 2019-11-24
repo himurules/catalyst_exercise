@@ -7,7 +7,7 @@
  */
 
 $invalid = true;
-$args = __getArguments([],['file:', 'create_table', 'dry_run:', 'u:', 'p:','h:','help']);
+$args = __getArguments([],['file:', 'create_table', 'dry_run', 'u:', 'p:','h:','help']);
 
 if(isset($args['create_table'])){
     $invalid = false;
@@ -22,11 +22,8 @@ if(isset($args['create_table'])){
 if(isset($args['file'])){
     $invalid = false;
     __checkInputFile($args);
-    $mysqli = __connectDatabase($args);
-    $users = [];
-    __parseInputFile($args['file'],$mysqli);
-    mysqli_close($mysqli);
-    print("User data uploaded successfully!").PHP_EOL;
+    __parseInputFile($args);
+    print("File {$args['file']} processed successfully!").PHP_EOL;
     die();
 }
 
@@ -79,19 +76,6 @@ function __createUserTable($mysqli){
     return false;
 }
 
-function __insertUsers($users, $mysqli){
-    if(count($users)==0)
-        return;
-    foreach($users as $user){
-        $sql = "INSERT INTO `users` VALUES ('".implode("','",$user)."')";
-        if (mysqli_query($mysqli,$sql) === TRUE) {
-            print "New record created successfully";
-        } else {
-            echo "Error: " . $sql . "<br>" . $conn->error;
-        }
-    }
-}
-
 function __checkDatabaseParams($args){
     $db_host = @$args['h'];
     $db_user = @$args['u'];
@@ -115,22 +99,29 @@ function __checkInputFile($args){
     }
 }
 
-function __parseInputFile($filename, $mysqli){
+function __parseInputFile($args){
     //starting line
     $row = 0;
-
     // opens the file
-    if ( ($file_handle = fopen($filename,'r')) == false ) {
+    if ( ($file_handle = fopen($args['file'],'r')) == false ) {
         print "Unable to open input file!".PHP_EOL;
         die();
     }
+    $dryRun = isset($args['dry_run']) ? true: false;
+    if(!$dryRun)
+        $mysqli = __connectDatabase($args);
     // while file has content
     while(!feof($file_handle)) {
         $row++;
+        //first row is headers
+        if($row-1 == 0)
+            continue;
+
         $csv_line = fgetcsv($file_handle); // fetches the csv line
+        //print_r($csv_line);exit;
         if ($csv_line === false) {
-            print("Empty File! Nothing to upload") . PHP_EOL;
-            die();
+            print("Empty Record at row {$row}!") . PHP_EOL;
+            continue;
         }
         // checks whatever the format is correct
         if (!is_array($csv_line) && (count($csv_line) != 3)) {
@@ -142,11 +133,20 @@ function __parseInputFile($filename, $mysqli){
             print("Invalid email format at row {$row}. Skipping Record!").PHP_EOL;
             continue;
         }
-        $user = [ucfirst($csv_line[0]), ucfirst($csv_line[1], strtolower($csv_line[2]))];
+        if(!$dryRun)
+            $user = [mysqli_real_escape_string($mysqli,ucfirst($csv_line[0])), mysqli_real_escape_string($mysqli, ucfirst($csv_line[1])), mysqli_real_escape_string($mysqli,strtolower($csv_line[2]))];
+        else
+            $user = [ucfirst($csv_line[0]), ucfirst($csv_line[1]), strtolower($csv_line[2])];
         $sql = "INSERT INTO `users` VALUES ('".implode("','",$user)."')";
-        if (mysqli_query($mysqli,$sql) === FALSE) {
-            print ("Error inserting record for row {$row}").PHP_EOL;
-            continue;
-        }
+        if(!$dryRun) {
+            mysqli_escape_string($mysqli,$sql);
+            if (mysqli_query($mysqli, $sql) === TRUE)
+                print ("User Record Inserted for row {$row}") . PHP_EOL;
+            else
+                print ("Error inserting record for row {$row}") . PHP_EOL;
+        }else
+            print $sql.PHP_EOL;
     }
+    if(!$dryRun)
+        mysqli_close($mysqli);
 }
